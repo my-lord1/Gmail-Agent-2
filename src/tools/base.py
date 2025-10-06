@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 from langchain_core.tools import BaseTool
 
-def get_tools(tool_names: Optional[List[str]] = None) -> List[BaseTool]:
+def get_tools(tool_names: Optional[List[str]] = None, include_gmail: bool = False) -> List[BaseTool]:
     """Get specified Gmail tools or all Gmail tools if tool_names is None.
     
     Args:
@@ -12,25 +12,26 @@ def get_tools(tool_names: Optional[List[str]] = None) -> List[BaseTool]:
     """
     all_tools = {}
 
-    # Try importing Gmail tools safely
-    try:
-        from email_assistant.tools.gmail.gmail_tools import (
-            fetch_emails_tool,
-            send_email_tool,
-            check_calendar_tool,
-            schedule_meeting_tool
-        )
+        # Try importing Gmail tools safely
+    if include_gmail:
+        try:
+            from .gmailapi.gmail_tools import (
+                fetch_emails_tool,
+                send_email_tool,
+                check_calendar_tool,
+                schedule_meeting_tool
+            )
 
-        all_tools.update({
-            "fetch_emails_tool": fetch_emails_tool,
-            "send_email_tool": send_email_tool,
-            "check_calendar_tool": check_calendar_tool,
-            "schedule_meeting_tool": schedule_meeting_tool,
-        })
+            all_tools.update({
+                "fetch_emails_tool": fetch_emails_tool,
+                "send_email_tool": send_email_tool,
+                "check_calendar_tool": check_calendar_tool,
+                "schedule_meeting_tool": schedule_meeting_tool,
+            })
 
-    except ImportError:
-        # If Gmail tools aren't available, return empty list
-        pass
+        except ImportError:
+            # If Gmail tools aren't available, return empty list
+            pass
 
     if tool_names is None:
         return list(all_tools.values())
@@ -44,3 +45,4 @@ def get_tools_by_name(tools: Optional[List[BaseTool]] = None) -> Dict[str, BaseT
         tools = get_tools()
     
     return {tool.name: tool for tool in tools}
+

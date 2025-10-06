@@ -1,31 +1,32 @@
 from typing import Literal
 
 from langchain.chat_models import init_chat_model
-
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.store.base import BaseStore
 from langgraph.types import interrupt, Command
 
-from email_assistant.tools import get_tools, get_tools_by_name
-from email_assistant.tools.gmail.prompt_templates import GMAIL_TOOLS_PROMPT
-from email_assistant.tools.gmail.gmail_tools import mark_as_read
-from email_assistant.prompts import triage_system_prompt, triage_user_prompt, agent_system_prompt_hitl_memory, default_triage_instructions, default_background, default_response_preferences, default_cal_preferences, MEMORY_UPDATE_INSTRUCTIONS, MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT
-from email_assistant.schemas import State, RouterSchema, StateInput, UserPreferences
-from email_assistant.utils import parse_gmail, format_for_display, format_gmail_markdown
+from src.tools.base import get_tools, get_tools_by_name
+from src.tools.gmailapi.prompt_templates import GMAIL_TOOLS_PROMPT
+from src.tools.gmailapi.gmail_tools import mark_as_read
+from src.prompts import triage_system_prompt, triage_user_prompt, agent_system_prompt_hitl_memory, default_triage_instructions, default_background, default_response_preferences, default_cal_preferences, MEMORY_UPDATE_INSTRUCTIONS, MEMORY_UPDATE_INSTRUCTIONS_REINFORCEMENT
+from src.schemas import State, RouterSchema, StateInput, UserPreferences
+from src.utils import parse_gmail, format_for_display, format_gmail_markdown
+import os
 from dotenv import load_dotenv
 
 load_dotenv(".env")
 
 # Get tools with Gmail tools
-tools = get_tools(["send_email_tool", "schedule_meeting_tool", "check_calendar_tool", "Question", "Done"], include_gmail=True)
+tools = get_tools(["send_email_tool", "schedule_meeting_tool", "check_calendar_tool"], include_gmail=True)
 tools_by_name = get_tools_by_name(tools)
 
 # Initialize the LLM for use with router / structured output
-llm = init_chat_model("openai:gpt-4.1", temperature=0.0)
+llm = ChatGoogleGenerativeAI(model = "gemini-2.5-pro", api_key=os.getenv("GOOGLE_API_KEY"), temperature = 0)
 llm_router = llm.with_structured_output(RouterSchema) 
 
 # Initialize the LLM, enforcing tool use (of any available tools) for agent
-llm = init_chat_model("openai:gpt-4.1", temperature=0.0)
+llm = ChatGoogleGenerativeAI(model = "gemini-2.5-pro", api_key=os.getenv("GOOGLE_API_KEY"), temperature = 0)
 llm_with_tools = llm.bind_tools(tools, tool_choice="required")
 
 def get_memory(store, namespace, default_content=None):
@@ -67,7 +68,7 @@ def update_memory(store, namespace, messages):
     # Get the existing memory
     user_preferences = store.get(namespace, "user_preferences")
     # Update the memory
-    llm = init_chat_model("openai:gpt-4.1", temperature=0.0).with_structured_output(UserPreferences)
+    llm = ChatGoogleGenerativeAI(model = "gemini-2.5-pro", api_key=os.getenv("GOOGLE_API_KEY"), temperature = 0).with_structured_output(UserPreferences)
     result = llm.invoke(
         [
             {"role": "system", "content": MEMORY_UPDATE_INSTRUCTIONS.format(current_profile=user_preferences.value, namespace=namespace)},
@@ -499,7 +500,7 @@ response_agent = agent_builder.compile()
 
 # Build overall workflow with store and checkpointer
 overall_workflow = (
-    StateGraph(State, input=StateInput)
+    StateGraph(State, input_schema=StateInput)
     .add_node(triage_router)
     .add_node(triage_interrupt_handler)
     .add_node("response_agent", response_agent)
